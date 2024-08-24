@@ -5,7 +5,7 @@
 # ***H*** *-------< hydrogen language >*
 ***an explicit, minimal, and readable abstraction.***
 
-reimagining C in a vacuum, using short, explicit words from the average lexicon.
+reimagining C in a vacuum, using short and clear words from the average lexicon.
 
 the goal is to maximize legibility and literal understanding upon initial code reading; the best hydrogen code is read and understood without the need for comments.
 
