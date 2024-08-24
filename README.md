@@ -6,6 +6,7 @@
 ***an explicit, minimal, and readable abstraction.***
 
 reimagining C in a vacuum, using short, explicit words from the average lexicon.
+
 the goal is to maximize legibility and literal understanding upon initial code reading; the best hydrogen code is read and understood without the need for comments.
 
 *H allows a more uniform, strong understanding of the computer's actions.*
