@@ -534,8 +534,8 @@ fn _expect( in byte ref got, in byte ref condition, in s4 line, in byte ref file
 
 //
 
-#define copy_bytes( TO, FROM, BYTES_SIZE ) memcpy( TO, FROM, BYTES_SIZE )
-#define move_bytes( TO, FROM, BYTES_SIZE ) memmove( TO, FROM, BYTES_SIZE )
+#define copy_bytes( FROM, BYTES_SIZE, TO ) memcpy( TO, FROM, BYTES_SIZE )
+#define move_bytes( FROM, BYTES_SIZE, TO ) memmove( TO, FROM, BYTES_SIZE )
 #define clear_bytes( REF, BYTES_SIZE ) memset( REF, 0, BYTES_SIZE )
 #define compare_bytes( A, B, BYTES_SIZE ) memcmp( A, B, BYTES_SIZE )
 
@@ -545,7 +545,7 @@ embed byte ref _construct_ref( in u4 type_size, in u8 size, in byte ref default_
 {
 	temp byte ref out_ref = to( byte ref, calloc( size, type_size ) );
 
-	if( default_bytes isnt null ) copy_bytes( out_ref, default_bytes, size * type_size );
+	if( default_bytes isnt null ) copy_bytes( default_bytes, size * type_size, out_ref );
 
 	out out_ref;
 }
@@ -584,7 +584,7 @@ embed byte ref _resize_ref( in byte ref inout_ref, in u8 in_new_size, in u8 in_t
 
 struct( canvas )
 {
-	byte ref data;
+	byte mutable_ref data;
 	u2 width;
 	u2 height;
 };
@@ -682,14 +682,14 @@ embed list resize_list( in list inout_list, in u4 in_size )
 
 embed list list_move( in list inout_list, in u4 in_pos, in u4 in_size, in s4 in_amount )
 {
-	move_bytes( inout_list->bytes + ( ( in_pos + in_amount ) * inout_list->type_size ), inout_list->bytes + ( in_pos * inout_list->type_size ), in_size * inout_list->type_size );
+	move_bytes( inout_list->bytes + ( in_pos * inout_list->type_size ), in_size * inout_list->type_size, inout_list->bytes + ( ( in_pos + in_amount ) * inout_list->type_size ) );
 	out inout_list;
 }
 
-embed list copy_list( in list inout_to, in u4 in_pos, in list in_from )
+embed list copy_list( in list from_list, in list to_list, in u4 at_pos )
 {
-	copy_bytes( inout_to->bytes + ( in_pos * inout_to->type_size ), in_from->bytes, in_from->size * in_from->type_size );
-	out inout_to;
+	copy_bytes( from_list->bytes, from_list->size * from_list->type_size, to_list->bytes + ( at_pos * to_list->type_size ) );
+	out to_list;
 }
 
 #define list_add( LIST, VAL ) \
@@ -705,7 +705,7 @@ embed list list_add_bytes_size( in list inout_list, byte ref in_bytes, in u4 in_
 {
 	temp const u4 old_size = inout_list->size;
 	resize_list( inout_list, inout_list->size + in_size );
-	copy_bytes( inout_list->bytes + ( old_size * inout_list->type_size ), in_bytes, in_size );
+	copy_bytes( in_bytes, in_size, inout_list->bytes + ( old_size * inout_list->type_size ) );
 	out inout_list;
 }
 #define list_add_bytes( LIST, BYTES ) list_add_bytes_size( LIST, to( byte ref, BYTES ), measure_ref( BYTES ) )
@@ -716,7 +716,7 @@ embed list list_insert_bytes_size( in list inout_list, in u4 in_pos, byte ref in
 	temp const u4 pos = CLAMP( in_pos, 0, old_size );
 	resize_list( inout_list, inout_list->size + in_size );
 	list_move( inout_list, pos, old_size - pos, to_s4( in_size ) );
-	copy_bytes( inout_list->bytes + ( pos * inout_list->type_size ), in_bytes, in_size );
+	copy_bytes( in_bytes, in_size, inout_list->bytes + ( pos * inout_list->type_size ) );
 	out inout_list;
 }
 #define list_insert_bytes( LIST, POS, BYTES ) list_insert_bytes_size( LIST, POS, to( byte ref, BYTES ), measure_ref( BYTES ) )
@@ -725,7 +725,7 @@ embed list list_add_list( in list inout_list, in list in_other )
 {
 	temp const u4 old_size = inout_list->size;
 	resize_list( inout_list, inout_list->size + in_other->size );
-	copy_list( inout_list, old_size, in_other );
+	copy_list( in_other, inout_list, old_size );
 	out inout_list;
 }
 
@@ -735,7 +735,7 @@ embed list list_insert_list( in list inout_list, in u4 in_pos, in list in_other 
 	temp const u4 pos = CLAMP( in_pos, 0, old_size );
 	resize_list( inout_list, inout_list->size + in_other->size );
 	list_move( inout_list, pos, old_size - pos, to_s4( in_other->size ) );
-	copy_list( inout_list, pos, in_other );
+	copy_list( in_other, inout_list, pos );
 	out inout_list;
 }
 
@@ -745,7 +745,7 @@ embed list list_replace_list( in list inout_list, in u4 in_pos, in u4 in_size, i
 	temp const u4 pos = in_pos + in_size;
 	resize_list( inout_list, inout_list->size - in_size + in_other->size );
 	list_move( inout_list, pos, old_size - pos, to_s4( inout_list->size ) - old_size );
-	copy_list( inout_list, in_pos, in_other );
+	copy_list( in_other, inout_list, in_pos );
 	out inout_list;
 }
 
@@ -753,7 +753,7 @@ embed list list_replace_list( in list inout_list, in u4 in_pos, in u4 in_size, i
 
 #define list_remove_first( LIST, TYPE ) \
 	list_get( LIST, TYPE, 0 ); \
-	copy_bytes( LIST->bytes, LIST->bytes + LIST->type_size, ( --LIST->size ) * LIST->type_size )
+	copy_bytes( LIST->bytes + LIST->type_size, ( --LIST->size ) * LIST->type_size, LIST->bytes )
 
 #define list_remove_last( LIST, TYPE ) list_get( LIST, TYPE, ( --LIST->size ) )
 
@@ -794,7 +794,7 @@ embed text new_text( byte ref in_bytes )
 #define text_get( TEXT, POS ) list_get( TEXT, byte, POS )
 #define empty_text( TEXT ) empty_list( TEXT, byte )
 #define text_move( TEXT, POS, SIZE, AMOUNT ) list_move( TEXT, POS, SIZE, AMOUNT )
-#define copy_text( TO, POS, FROM ) copy_list( TO, POS, FROM )
+#define copy_text( FROM, TO, POS ) copy_list( FROM, TO, POS )
 #define text_add( TEXT, CHAR ) list_add( TEXT, to_byte( CHAR ) )
 #define text_insert( TEXT, POS, CHAR ) list_insert( TEXT, POS, to_byte( CHAR ) )
 #define text_add_bytes_size( TEXT, BYTES, SIZE ) list_add_bytes_size( TEXT, to( byte ref, BYTES ), SIZE )
@@ -1213,7 +1213,7 @@ fn UNIT_TEST_COPY_LIST()
 	}
 
 	resize_list( dest_list, 10 );
-	copy_list( dest_list, 2, source_list );
+	copy_list( source_list, dest_list, 2 );
 
 	iter( i, 5 )
 	{
@@ -1492,7 +1492,7 @@ fn UNIT_TEST_COPY_TEXT()
 	text src = new_text( "Hello" );
 	text dest = new_text( "World!" );
 
-	copy_text( dest, 0, src );
+	copy_text( src, dest, 0 );
 
 	expect( compare_bytes( dest->bytes, "Hello!", dest->size ) == 0 );
 
