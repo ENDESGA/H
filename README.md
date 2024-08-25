@@ -60,6 +60,7 @@ fn do_thing( in s4 ref a, in s4 b )
 ## example code
 *unit test for list insertion:*
 ```c
+// since it has no output, it's just `fn`
 fn UNIT_TEST_LIST_INSERT()
 {
 	temp list test_list = new_list( s4 );
@@ -78,6 +79,7 @@ fn UNIT_TEST_LIST_INSERT()
 ```
 *list_insert_list implementation:*
 ```c
+// `embed` before the output type embeds the function where it's used
 embed list list_insert_list( in list this_list, in u4 in_pos, in list other_list )
 {
 	temp const u4 old_size = this_list->size;
