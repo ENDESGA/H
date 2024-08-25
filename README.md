@@ -2,10 +2,10 @@
   <img src="https://github.com/user-attachments/assets/6b22f545-74ac-46b5-b72f-cb01910d9d65" alt="hydrogen">
 </p>
 
-# ***H*** *-------< hydrogen language >*
+# ***H*** *-------< h language >*
 ***an explicit, minimal, and readable abstraction.***
 
-reimagining C in a vacuum, using short and clear words from the average lexicon.
+reimagining C in a vacuum, using short and clear words from the average lexicon. designed to flow.
 
 just bytes, types, references, and functions:
 ```c#
