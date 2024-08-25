@@ -556,12 +556,12 @@ embed byte ref _construct_ref( in u4 type_size, in u8 size, in byte ref default_
 
 #define measure_ref( ... ) strlen( to( const char mutable_ref, __VA_ARGS__ ) )
 
-embed byte ref _resize_ref( in byte ref inout_ref, in u8 in_new_size, in u8 in_type_size, in u8 in_old_size )
+embed byte ref _resize_ref( in byte ref this_ref, in u8 in_new_size, in u8 in_type_size, in u8 in_old_size )
 {
 	temp const u8 old_size = in_old_size * in_type_size;
 	temp const u8 new_size = in_new_size * in_type_size;
 
-	temp byte ref out_ref = realloc( to( byte mutable_ref, inout_ref ), new_size );
+	temp byte ref out_ref = realloc( to( byte mutable_ref, this_ref ), new_size );
 
 	if( new_size > old_size )
 	{
@@ -629,7 +629,7 @@ embed list construct_list( in u4 size, in u4 capacity, in u4 type_size, byte ref
 {
 	list out_list = new_object( list );
 	//
-	val_of( to( byte mutable_ref ref, ref_of( out_list->bytes ) ) ) = to( byte ref, bytes );
+	set_ref( out_list->bytes, bytes );
 	out_list->size = size;
 	out_list->capacity = pick( capacity <= size, size + 1, capacity );
 	out_list->type_size = type_size;
@@ -647,29 +647,29 @@ fn delete_list( list in_list )
 	free( in_list );
 }
 
-embed list grow_list( in list inout_list )
+embed list grow_list( in list this_list )
 {
-	if( inout_list->capacity > inout_list->size + 1 ) out inout_list;
-	temp u4 old_size = inout_list->capacity;
+	if( this_list->capacity > this_list->size + 1 ) out this_list;
+	temp u4 old_size = this_list->capacity;
 	do {
-		inout_list->capacity = ( inout_list->capacity + ( inout_list->size << 1 ) + 1 ) >> 1;
-	} while( inout_list->capacity <= inout_list->size );
+		this_list->capacity = ( this_list->capacity + ( this_list->size << 1 ) + 1 ) >> 1;
+	} while( this_list->capacity <= this_list->size );
 
-	val_of( to( byte mutable_ref ref, ref_of( inout_list->bytes ) ) ) = resize_ref(
-		inout_list->bytes,
+	val_of( to( byte mutable_ref ref, ref_of( this_list->bytes ) ) ) = resize_ref(
+		this_list->bytes,
 		byte,
-		old_size * inout_list->type_size,
-		inout_list->capacity * inout_list->type_size
+		old_size * this_list->type_size,
+		this_list->capacity * this_list->type_size
 	);
 
-	out inout_list;
+	out this_list;
 }
 
-embed list resize_list( in list inout_list, in u4 in_size )
+embed list resize_list( in list this_list, in u4 in_size )
 {
-	inout_list->size = in_size;
-	grow_list( inout_list );
-	out inout_list;
+	this_list->size = in_size;
+	grow_list( this_list );
+	out this_list;
 }
 
 #define list_set( LIST, POS, VAL ) ( to( type_of( VAL ) ref, LIST->bytes ) )[ ( POS ) ] = ( VAL )
@@ -680,10 +680,10 @@ embed list resize_list( in list inout_list, in u4 in_size )
 	LIST->size = 0; \
 	list_set( LIST, 0, make( TYPE, 0 ) )
 
-embed list list_move( in list inout_list, in u4 in_pos, in u4 in_size, in s4 in_amount )
+embed list list_move( in list this_list, in u4 in_pos, in u4 in_size, in s4 in_amount )
 {
-	move_bytes( inout_list->bytes + ( in_pos * inout_list->type_size ), in_size * inout_list->type_size, inout_list->bytes + ( ( in_pos + in_amount ) * inout_list->type_size ) );
-	out inout_list;
+	move_bytes( this_list->bytes + ( in_pos * this_list->type_size ), in_size * this_list->type_size, this_list->bytes + ( ( in_pos + in_amount ) * this_list->type_size ) );
+	out this_list;
 }
 
 embed list copy_list( in list from_list, in list to_list, in u4 at_pos )
@@ -701,52 +701,52 @@ embed list copy_list( in list from_list, in list to_list, in u4 at_pos )
 	list_move( LIST, ( POS ), ( LIST->size++ ) - ( POS ), 1 ); \
 	list_set( LIST, POS, VAL )
 
-embed list list_add_bytes_size( in list inout_list, byte ref in_bytes, in u4 in_size )
+embed list list_add_bytes_size( in list this_list, byte ref in_bytes, in u4 in_size )
 {
-	temp const u4 old_size = inout_list->size;
-	resize_list( inout_list, inout_list->size + in_size );
-	copy_bytes( in_bytes, in_size, inout_list->bytes + ( old_size * inout_list->type_size ) );
-	out inout_list;
+	temp const u4 old_size = this_list->size;
+	resize_list( this_list, this_list->size + in_size );
+	copy_bytes( in_bytes, in_size, this_list->bytes + ( old_size * this_list->type_size ) );
+	out this_list;
 }
 #define list_add_bytes( LIST, BYTES ) list_add_bytes_size( LIST, to( byte ref, BYTES ), measure_ref( BYTES ) )
 
-embed list list_insert_bytes_size( in list inout_list, in u4 in_pos, byte ref in_bytes, in u4 in_size )
+embed list list_insert_bytes_size( in list this_list, in u4 in_pos, byte ref in_bytes, in u4 in_size )
 {
-	temp const u4 old_size = inout_list->size;
+	temp const u4 old_size = this_list->size;
 	temp const u4 pos = CLAMP( in_pos, 0, old_size );
-	resize_list( inout_list, inout_list->size + in_size );
-	list_move( inout_list, pos, old_size - pos, to_s4( in_size ) );
-	copy_bytes( in_bytes, in_size, inout_list->bytes + ( pos * inout_list->type_size ) );
-	out inout_list;
+	resize_list( this_list, this_list->size + in_size );
+	list_move( this_list, pos, old_size - pos, to_s4( in_size ) );
+	copy_bytes( in_bytes, in_size, this_list->bytes + ( pos * this_list->type_size ) );
+	out this_list;
 }
 #define list_insert_bytes( LIST, POS, BYTES ) list_insert_bytes_size( LIST, POS, to( byte ref, BYTES ), measure_ref( BYTES ) )
 
-embed list list_add_list( in list inout_list, in list in_other )
+embed list list_add_list( in list this_list, in list in_other )
 {
-	temp const u4 old_size = inout_list->size;
-	resize_list( inout_list, inout_list->size + in_other->size );
-	copy_list( in_other, inout_list, old_size );
-	out inout_list;
+	temp const u4 old_size = this_list->size;
+	resize_list( this_list, this_list->size + in_other->size );
+	copy_list( in_other, this_list, old_size );
+	out this_list;
 }
 
-embed list list_insert_list( in list inout_list, in u4 in_pos, in list in_other )
+embed list list_insert_list( in list this_list, in u4 in_pos, in list in_other )
 {
-	temp const u4 old_size = inout_list->size;
+	temp const u4 old_size = this_list->size;
 	temp const u4 pos = CLAMP( in_pos, 0, old_size );
-	resize_list( inout_list, inout_list->size + in_other->size );
-	list_move( inout_list, pos, old_size - pos, to_s4( in_other->size ) );
-	copy_list( in_other, inout_list, pos );
-	out inout_list;
+	resize_list( this_list, this_list->size + in_other->size );
+	list_move( this_list, pos, old_size - pos, to_s4( in_other->size ) );
+	copy_list( in_other, this_list, pos );
+	out this_list;
 }
 
-embed list list_replace_list( in list inout_list, in u4 in_pos, in u4 in_size, in list in_other )
+embed list list_replace_list( in list this_list, in u4 in_pos, in u4 in_size, in list in_other )
 {
-	temp const u4 old_size = inout_list->size;
+	temp const u4 old_size = this_list->size;
 	temp const u4 pos = in_pos + in_size;
-	resize_list( inout_list, inout_list->size - in_size + in_other->size );
-	list_move( inout_list, pos, old_size - pos, to_s4( inout_list->size ) - old_size );
-	copy_list( in_other, inout_list, in_pos );
-	out inout_list;
+	resize_list( this_list, this_list->size - in_size + in_other->size );
+	list_move( this_list, pos, old_size - pos, to_s4( this_list->size ) - old_size );
+	copy_list( in_other, this_list, in_pos );
+	out this_list;
 }
 
 #define list_delete( LIST, POS ) list_move( LIST, ( POS ) + 1, ( LIST->size-- ) - ( ( POS ) + 1 ), -1 )
@@ -1240,18 +1240,18 @@ fn UNIT_TEST_LIST_ADD()
 
 fn UNIT_TEST_LIST_INSERT()
 {
-	list test_list = new_list( s4 );
+	temp list test_list = new_list( s4 );
 
 	iter( i, 5 )
 	{
 		list_add( test_list, i );
 	}
 
-	list_insert( test_list, 2, 42 );
+	list_insert( test_list, 2, 7 );
 
-	expect( test_list->size == 6 );
-	expect( list_get( test_list, s4, 2 ) == 42 );
-	expect( list_get( test_list, s4, 3 ) == 2 );
+	expect( test_list->size > 5 );
+	expect_val( s4, list_get( test_list, s4, 2 ), 7 );
+	expect_val( s4, list_get( test_list, s4, 3 ), 2 );
 
 	delete_list( test_list );
 }
@@ -1309,8 +1309,8 @@ fn UNIT_TEST_LIST_ADD_LIST()
 
 fn UNIT_TEST_LIST_INSERT_LIST()
 {
-	list list1 = new_list( s4 );
-	list list2 = new_list( s4 );
+	temp list list1 = new_list( s4 );
+	temp list list2 = new_list( s4 );
 
 	iter( i, 5 )
 	{
@@ -1363,7 +1363,7 @@ fn UNIT_TEST_LIST_DELETE()
 
 	iter( i, 5 )
 	{
-		list_add( test_list, i );
+		list_add( test_list, to_s4( i ) );
 	}
 
 	list_delete( test_list, 2 );
