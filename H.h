@@ -214,13 +214,13 @@
 #define perm static
 
 #define embed perm inline
-#define fn embed _
+#define fn embed void
 #define global perm
 #define in const
 #define out return
 
-#define fn_ref( OUTPUT, NAME, ... ) OUTPUT val_of( NAME )(__VA_ARGS__ )
-#define fn_type( OUTPUT, ... ) type_from( type_of( fn_ref( DEFAULTS( ( _ ), OUTPUT ), , __VA_ARGS__ ) ) )
+#define fn_ref( OUTPUT, NAME, ... ) OUTPUT val_of( NAME )( __VA_ARGS__ )
+#define fn_type( OUTPUT, ... ) type_from( type_of( fn_ref( DEFAULTS( ( byte ), OUTPUT ), , __VA_ARGS__ ) ) )
 
 #define fn_type_from( FN ) type_from( type_of( FN ) )
 
@@ -241,10 +241,8 @@
 
 //
 
-type_from( void ) _;
-type_from( void ) anon;
-#define null to( _ ref, 0 )
-#define print_ref( ... ) print( "%p", to( _ ref, __VA_ARGS__ ) )
+#define null to( void ref, 0 )
+#define print_ref( ... ) print( "%p", to( void ref, __VA_ARGS__ ) )
 
 type_from( char ) byte;
 #define to_byte( ... ) to_u1( __VA_ARGS__ )
@@ -543,9 +541,9 @@ fn _expect( in byte ref got, in byte ref condition, in s4 line, in byte ref file
 
 //
 
-embed byte ref _construct_ref( in u4 type_size, in u8 size, in _ ref default_bytes )
+embed byte ref _construct_ref( in u4 type_size, in u8 size, in byte ref default_bytes )
 {
-	temp _ ref out_ref = to( _ ref, calloc( size, type_size ) );
+	temp byte ref out_ref = to( byte ref, calloc( size, type_size ) );
 
 	if( default_bytes isnt null ) copy_bytes( out_ref, default_bytes, size * type_size );
 
@@ -554,16 +552,16 @@ embed byte ref _construct_ref( in u4 type_size, in u8 size, in _ ref default_byt
 #define new_ref( TYPE, ... ) _new_ref_make( TYPE, DEFAULTS( ( 1, 0 ), __VA_ARGS__ ) )
 #define new_object( TYPE, ... ) _new_ref_make( struct TYPE, DEFAULTS( ( 1, 0 ), __VA_ARGS__ ) )
 #define _new_ref_make( TYPE, ... ) EVAL( _new_ref( TYPE, __VA_ARGS__ ) )
-#define _new_ref( TYPE, SIZE, DEF ) ( to( TYPE ref, _construct_ref( size_of( TYPE ), SIZE, to( const _ ref, DEF ) ) ) )
+#define _new_ref( TYPE, SIZE, DEF ) ( to( TYPE ref, _construct_ref( size_of( TYPE ), SIZE, to( const byte ref, DEF ) ) ) )
 
 #define measure_ref( ... ) strlen( to( const char mutable_ref, __VA_ARGS__ ) )
 
-embed byte ref _resize_ref( in _ ref inout_ref, in u8 in_new_size, in u8 in_type_size, in u8 in_old_size )
+embed byte ref _resize_ref( in byte ref inout_ref, in u8 in_new_size, in u8 in_type_size, in u8 in_old_size )
 {
 	temp const u8 old_size = in_old_size * in_type_size;
 	temp const u8 new_size = in_new_size * in_type_size;
 
-	temp _ ref out_ref = realloc( to( _ mutable_ref, inout_ref ), new_size );
+	temp byte ref out_ref = realloc( to( byte mutable_ref, inout_ref ), new_size );
 
 	if( new_size > old_size )
 	{
@@ -578,9 +576,44 @@ embed byte ref _resize_ref( in _ ref inout_ref, in u8 in_new_size, in u8 in_type
 
 	out out_ref;
 }
-#define resize_ref( REF, TYPE, OLD_SIZE, NEW_SIZE ) to( TYPE ref, _resize_ref( to( _ ref, REF ), NEW_SIZE, size_of( TYPE ), OLD_SIZE ) )
+#define resize_ref( REF, TYPE, OLD_SIZE, NEW_SIZE ) to( TYPE ref, _resize_ref( to( byte ref, REF ), NEW_SIZE, size_of( TYPE ), OLD_SIZE ) )
 
 #define delete_ref( REF ) if_not_null( REF ) free( REF )
+
+//
+
+struct( canvas )
+{
+	byte ref data;
+	u2 width;
+	u2 height;
+};
+
+embed canvas new_canvas( in u2 width, in u2 height, in u1 bytes_per_pixel )
+{
+	out make( canvas, .data = new_ref( byte, ( width * height ) * bytes_per_pixel ), .width = width, .height = height );
+}
+
+struct( rgba2 )
+{
+	byte rg;
+	byte ba;
+};
+
+struct( rgb3 )
+{
+	byte b;
+	byte g;
+	byte r;
+};
+
+struct( rgba4 )
+{
+	byte b;
+	byte g;
+	byte r;
+	byte a;
+};
 
 //
 
@@ -592,7 +625,7 @@ object( list )
 	u2 type_size;
 };
 
-embed list construct_list( in u4 size, in u4 capacity, in u4 type_size, _ ref bytes )
+embed list construct_list( in u4 size, in u4 capacity, in u4 type_size, byte ref bytes )
 {
 	list out_list = new_object( list );
 	//
@@ -604,7 +637,7 @@ embed list construct_list( in u4 size, in u4 capacity, in u4 type_size, _ ref by
 	out out_list;
 }
 
-#define new_list_bytes_size( TYPE, SIZE, BYTES, BYTES_SIZE ) construct_list( SIZE, BYTES_SIZE, size_of( TYPE ), to( _ ref, BYTES ) )
+#define new_list_bytes_size( TYPE, SIZE, BYTES, BYTES_SIZE ) construct_list( SIZE, BYTES_SIZE, size_of( TYPE ), to( byte ref, BYTES ) )
 #define new_list( TYPE, ... ) new_list_bytes_size( TYPE, 0, new_ref( TYPE, DEFAULTS( ( 1, null ), __VA_ARGS__ ) ), 1 )
 
 fn delete_list( list in_list )
@@ -1068,7 +1101,7 @@ fn main_init()
 fn UNIT_TEST_CONSTRUCT_LIST()
 {
 	s4 data[] = { 1, 2, 3, 4, 5 };
-	temp list test_list = construct_list( 5, 10, s4_size, ref_of( data ) );
+	temp list test_list = construct_list( 5, 10, s4_size, to( byte ref, ref_of( data ) ) );
 
 	expect_val( u4, test_list->size, 5 );
 	expect_val( u4, test_list->capacity, 10 );
@@ -1153,7 +1186,7 @@ fn UNIT_TEST_EMPTY_LIST()
 fn UNIT_TEST_LIST_MOVE()
 {
 	list test_list = new_list( s4 );
-	iter(i, 5)
+	iter( i, 5 )
 	{
 		list_add( test_list, i );
 	}
@@ -1174,7 +1207,7 @@ fn UNIT_TEST_COPY_LIST()
 	list source_list = new_list( s4 );
 	list dest_list = new_list( s4 );
 
-	iter(i, 5)
+	iter( i, 5 )
 	{
 		list_add( source_list, i );
 	}
@@ -1182,7 +1215,7 @@ fn UNIT_TEST_COPY_LIST()
 	resize_list( dest_list, 10 );
 	copy_list( dest_list, 2, source_list );
 
-	iter(i, 5)
+	iter( i, 5 )
 	{
 		expect( list_get( dest_list, s4, i + 2 ) == i );
 	}
@@ -1195,7 +1228,7 @@ fn UNIT_TEST_LIST_ADD()
 {
 	list test_list = new_list( s4 );
 
-	iter(i, 10)
+	iter( i, 10 )
 	{
 		list_add( test_list, i );
 		expect( test_list->size == i + 1 );
@@ -1209,7 +1242,7 @@ fn UNIT_TEST_LIST_INSERT()
 {
 	list test_list = new_list( s4 );
 
-	iter(i, 5)
+	iter( i, 5 )
 	{
 		list_add( test_list, i );
 	}
@@ -1256,7 +1289,7 @@ fn UNIT_TEST_LIST_ADD_LIST()
 	list list1 = new_list( s4 );
 	list list2 = new_list( s4 );
 
-	iter(i, 5)
+	iter( i, 5 )
 	{
 		list_add( list1, i );
 		list_add( list2, i + 5 );
@@ -1265,7 +1298,7 @@ fn UNIT_TEST_LIST_ADD_LIST()
 	list_add_list( list1, list2 );
 
 	expect( list1->size == 10 );
-	iter(i, 10)
+	iter( i, 10 )
 	{
 		expect( list_get( list1, s4, i ) == i );
 	}
@@ -1279,7 +1312,7 @@ fn UNIT_TEST_LIST_INSERT_LIST()
 	list list1 = new_list( s4 );
 	list list2 = new_list( s4 );
 
-	iter(i, 5)
+	iter( i, 5 )
 	{
 		list_add( list1, i );
 		list_add( list2, i + 10 );
@@ -1302,12 +1335,12 @@ fn UNIT_TEST_LIST_REPLACE_LIST()
 	list list1 = new_list( s4 );
 	list list2 = new_list( s4 );
 
-	iter(i, 10)
+	iter( i, 10 )
 	{
 		list_add( list1, i );
 	}
 
-	iter(i, 3)
+	iter( i, 3 )
 	{
 		list_add( list2, i + 100 );
 	}
@@ -1328,7 +1361,7 @@ fn UNIT_TEST_LIST_DELETE()
 {
 	list test_list = new_list( s4 );
 
-	iter(i, 5)
+	iter( i, 5 )
 	{
 		list_add( test_list, i );
 	}
@@ -1345,7 +1378,7 @@ fn UNIT_TEST_LIST_REMOVE_FIRST_LAST()
 {
 	list test_list = new_list( s4 );
 
-	iter(i, 5)
+	iter( i, 5 )
 	{
 		list_add( test_list, i );
 	}
@@ -1367,7 +1400,7 @@ fn UNIT_TEST_ITER_LIST()
 {
 	list test_list = new_list( s4 );
 
-	iter(i, 5)
+	iter( i, 5 )
 	{
 		list_add( test_list, i );
 	}
