@@ -189,7 +189,7 @@
 #undef max
 
 #define _require_semicolon \
-	do { \
+	loop { \
 	} while( 0 )
 
 //
@@ -227,6 +227,7 @@
 #define pick( IF_YES, THEN_THIS, ELSE_THIS ) ( ( IF_YES ) ? ( THEN_THIS ) : ( ELSE_THIS ) )
 
 #define print( ... ) printf( __VA_ARGS__ )
+#define print_nl() printf( "\n" )
 
 //
 
@@ -250,6 +251,20 @@ type_from( char ) byte;
 #define byte_min u1_min
 #define byte_max u1_max
 #define print_byte( ... ) print_u1( __VA_ARGS__ )
+
+#ifndef va_start
+	#ifndef __GNUC_VA_LIST
+		#define __GNUC_VA_LIST
+type_from( __builtin_va_list ) __gnuc_va_list;
+	#endif
+
+	#define va_start( v, l ) __builtin_va_start( v, l )
+	#define va_end( v ) __builtin_va_end( v )
+	#define va_arg( v, l ) __builtin_va_arg( v, l )
+	#define va_copy( d, s ) __builtin_va_copy( d, s )
+
+type_from( __gnuc_va_list ) va_list;
+#endif
 
 //
 
@@ -297,7 +312,7 @@ type_from( char ) byte;
 //
 
 #define expect_val( TYPE, VALUE, EXPECTED ) \
-	do { \
+	loop { \
 		if( VALUE is EXPECTED ) skip; \
 		print( "%s :: EXPECTED: %s", #VALUE, #EXPECTED ); \
 		print( ", got: " ); \
@@ -456,7 +471,7 @@ type_from( s1 ) flag;
 
 //
 
-#define loop while( yes )
+#define loop do
 
 #define if_all( ... ) if( SYMBOL_CHAIN(, and, , __VA_ARGS__ ) )
 #define if_any( ... ) if( SYMBOL_CHAIN(, or, , __VA_ARGS__ ) )
@@ -474,6 +489,8 @@ type_from( s1 ) flag;
 #define while_not_null( ... ) while( SYMBOL_CHAIN(, and, isnt null, __VA_ARGS__ ) )
 #define while( ... ) while( SYMBOL_CHAIN(, and, , __VA_ARGS__ ) )
 #define elwhile( ... ) else while( __VA_ARGS__ )
+
+#define until( ... ) while( not( SYMBOL_CHAIN(, and, , __VA_ARGS__ ) ) )
 
 //
 
@@ -561,7 +578,7 @@ embed byte ref _resize_ref( in byte ref this_ref, in u8 in_new_size, in u8 in_ty
 	temp const u8 old_size = in_old_size * in_type_size;
 	temp const u8 new_size = in_new_size * in_type_size;
 
-	temp byte ref out_ref = realloc( to( byte mutable_ref, this_ref ), new_size );
+	temp byte ref out_ref = to( byte ref, realloc( to( byte mutable_ref, this_ref ), new_size ) );
 
 	if( new_size > old_size )
 	{
@@ -587,12 +604,14 @@ struct( canvas )
 	byte mutable_ref data;
 	u2 width;
 	u2 height;
+	u1 type_size;
 };
 
-embed canvas new_canvas( in u2 width, in u2 height, in u1 bytes_per_pixel )
+embed canvas _new_canvas( in u1 bytes_per_pixel, in u2 width, in u2 height )
 {
-	out make( canvas, .data = new_ref( byte, ( width * height ) * bytes_per_pixel ), .width = width, .height = height );
+	out make( canvas, .data = new_ref( byte, ( width * height ) * bytes_per_pixel ), .width = width, .height = height, .type_size = bytes_per_pixel );
 }
+#define new_canvas( TYPE, WIDTH, HEIGHT ) _new_canvas( size_of( TYPE ), WIDTH, HEIGHT )
 
 struct( rgba2 )
 {
@@ -651,7 +670,7 @@ embed list grow_list( in list this_list )
 {
 	if( this_list->capacity > this_list->size + 1 ) out this_list;
 	temp u4 old_size = this_list->capacity;
-	do {
+	loop {
 		this_list->capacity = ( this_list->capacity + ( this_list->size << 1 ) + 1 ) >> 1;
 	} while( this_list->capacity <= this_list->size );
 
@@ -780,14 +799,6 @@ type_from( list ) text;
 
 #define new_text_size( BYTES, SIZE ) new_list_bytes_size( byte, SIZE, new_ref( byte, SIZE + 1, BYTES ), SIZE + 1 )
 
-embed text new_text( byte ref in_bytes )
-{
-	if_null( in_bytes ) out new_list( byte );
-	temp u4 size = measure_ref( in_bytes );
-	out new_text_size( in_bytes, size );
-}
-#define new_text( ... ) new_text( to( byte ref, DEFAULTS( ( null ), __VA_ARGS__ ) ) )
-
 #define delete_text( TEXT ) delete_list( TEXT )
 #define resize_text( TEXT, SIZE ) resize_list( TEXT, SIZE )
 #define text_set( TEXT, POS, CHAR ) list_set( TEXT, POS, to_byte( CHAR ) )
@@ -808,9 +819,291 @@ embed text new_text( byte ref in_bytes )
 #define text_remove_last( TEXT ) list_remove_last( TEXT, byte )
 #define text_end( TEXT ) TEXT->bytes[ TEXT->size ] = '\0'
 #define duplicate_text( TEXT ) new_text_size( TEXT->bytes, TEXT->size )
-#define print_text( TEXT ) print_bytes( TEXT->bytes )
-
+#define print_text( TEXT ) print( "%s", TEXT->bytes )
 #define text_newline( TEXT ) text_add( TEXT, '\n' )
+
+#define TEXT_ADD_BUFFER( BYTES ) \
+	byte buffer[ BYTES ]; \
+	temp byte mutable_ref p = buffer + BYTES
+
+#define TEXT_ADD_NEG \
+	if( val < 0 ) \
+	{ \
+		val = -val; \
+		text_add( t, '-' ); \
+	} \
+	_require_semicolon
+
+#define TEXT_ADD_U( VAL ) \
+	temp u1 size = 0; \
+	loop { \
+		*--p = ( VAL % 10 ) + '0'; \
+		VAL /= 10; \
+		++size; \
+	} while( VAL > 0 ); \
+	text_add_bytes_size( t, p, size )
+
+#define TEXT_ADD_S \
+	TEXT_ADD_NEG; \
+	TEXT_ADD_U
+
+fn text_add_u1( in text t, u1 val )
+{
+	TEXT_ADD_BUFFER( 3 );
+	TEXT_ADD_U( val );
+}
+
+fn text_add_s1( in text t, s1 val )
+{
+	TEXT_ADD_BUFFER( 4 );
+	TEXT_ADD_S( val );
+}
+
+fn text_add_u2( in text t, u2 val )
+{
+	TEXT_ADD_BUFFER( 5 );
+	TEXT_ADD_U( val );
+}
+
+fn text_add_s2( in text t, s2 val )
+{
+	TEXT_ADD_BUFFER( 6 );
+	TEXT_ADD_S( val );
+}
+
+fn text_add_u4( in text t, u4 val )
+{
+	TEXT_ADD_BUFFER( 10 );
+	TEXT_ADD_U( val );
+}
+
+fn text_add_s4( in text t, s4 val )
+{
+	TEXT_ADD_BUFFER( 11 );
+	TEXT_ADD_S( val );
+}
+
+fn text_add_u8( in text t, u8 val )
+{
+	TEXT_ADD_BUFFER( 20 );
+	TEXT_ADD_U( val );
+}
+
+fn text_add_s8( in text t, s8 val )
+{
+	TEXT_ADD_BUFFER( 21 );
+	TEXT_ADD_S( val );
+}
+
+#define TEXT_ADD_F( N ) \
+	temp s##N int_part = to( s##N, val ); \
+	temp f##N frac_part = val - int_part; \
+	TEXT_ADD_U( int_part ); \
+	text_add( t, '.' ); \
+	iter( i, N ) \
+	{ \
+		frac_part *= 10; \
+		temp u1 digit = ( u1 )frac_part; \
+		text_add( t, '0' + digit ); \
+		frac_part -= digit; \
+	} \
+	_require_semicolon
+
+fn text_add_f4( in text t, f4 val )
+{
+	TEXT_ADD_BUFFER( 32 );
+	TEXT_ADD_NEG;
+	TEXT_ADD_F( 4 );
+}
+
+fn text_add_f8( in text t, f8 val )
+{
+	TEXT_ADD_BUFFER( 64 );
+	TEXT_ADD_NEG;
+	TEXT_ADD_F( 8 );
+}
+
+embed text _new_text( byte ref in_bytes, ... )
+{
+	if_null( in_bytes ) out new_list( byte );
+
+	va_list args;
+	va_start( args, in_bytes );
+
+	if_null( va_arg( args, byte ref ) )
+	{
+		temp u4 size = measure_ref( in_bytes );
+		out new_text_size( in_bytes, size );
+	}
+	va_end( args );
+	va_start( args, in_bytes );
+
+	temp text t = new_list( byte );
+
+	temp byte mutable_ref current = in_bytes - 1;
+
+	loop
+	{
+		++current;
+		if( val_of( current ) isnt '%' )
+		{
+			text_add( t, val_of( current ) );
+			skip;
+		}
+		else
+		{
+			++current;
+			select( val_of( current ) )
+			{
+				with( 'u' )
+				{
+					++current;
+					select( val_of( current ) )
+					{
+						with( '1' )
+						{
+							text_add_u1( t, va_arg( args, unsigned int ) );
+							skip;
+						}
+						with( '2' )
+						{
+							text_add_u2( t, va_arg( args, unsigned int ) );
+							skip;
+						}
+						with( '4' )
+						{
+							text_add_u4( t, va_arg( args, unsigned int ) );
+							skip;
+						}
+						with( '8' )
+						{
+							text_add_u8( t, va_arg( args, unsigned long long ) );
+							skip;
+						}
+						with_other skip;
+					}
+				}
+
+				with( 's' )
+				{
+					++current;
+					select( val_of( current ) )
+					{
+						with( '1' )
+						{
+							text_add_s1( t, va_arg( args, signed int ) );
+							skip;
+						}
+						with( '2' )
+						{
+							text_add_s2( t, va_arg( args, signed int ) );
+							skip;
+						}
+						with( '4' )
+						{
+							text_add_s4( t, va_arg( args, signed int ) );
+							skip;
+						}
+						with( '8' )
+						{
+							text_add_s8( t, va_arg( args, signed long long ) );
+							skip;
+						}
+						with_other skip;
+					}
+				}
+
+				with( 'f' )
+				{
+					++current;
+					select( val_of( current ) )
+					{
+						with( '4' )
+						{
+							text_add_f4( t, va_arg( args, double ) );
+							skip;
+						}
+						with( '8' )
+						{
+							text_add_f8( t, va_arg( args, double ) );
+							skip;
+						}
+						with_other skip;
+					}
+				}
+
+				with( 't' )
+				{
+					byte ref s = va_arg( args, char* );
+					text_add_bytes( t, s );
+					skip;
+				}
+			}
+		}
+	}
+	until( val_of( current ) is '\0' );
+
+	out t;
+}
+#define new_text( ... ) _new_text( DEFAULTS( ( null, null, null, null, null, null, null, null, null ), __VA_ARGS__ ) )
+
+//
+
+#define nano_per_micro 1000
+#define nano_per_milli 1000000
+#define nano_per_sec 1000000000
+#define nano_per_min 60000000000
+#define nano_per_hour 3600000000000
+#define micro_per_milli 1000
+#define micro_per_sec 1000000
+#define micro_per_min 60000000
+#define micro_per_hour 3600000000
+#define milli_per_sec 1000
+#define milli_per_min 60000
+#define milli_per_hour 3600000
+#define sec_per_min 60
+#define sec_per_hour 3600
+#define min_per_hour 60
+
+type_from( u8 ) ns;
+
+embed ns time_now()
+{
+#if OS_WINDOWS
+	LARGE_INTEGER frequency;
+	LARGE_INTEGER counter;
+	QueryPerformanceFrequency( ref_of( frequency ) );
+	QueryPerformanceCounter( ref_of( counter ) );
+	out to( ns, ( counter.QuadPart * nano_per_sec ) / frequency.QuadPart );
+#else
+	struct timespec ts;
+	clock_gettime( CLOCK_MONOTONIC, ref_of( ts ) );
+	out to( ns, ts.tv_sec * nano_per_sec + ts.tv_nsec );
+#endif
+}
+
+fn sleep_ns( in ns time )
+{
+#if OS_WINDOWS
+	LARGE_INTEGER freq;
+	LARGE_INTEGER start;
+	LARGE_INTEGER end;
+	QueryPerformanceFrequency( ref_of( freq ) );
+	QueryPerformanceCounter( ref_of( start ) );
+
+	f8 elapsed_ns = 0;
+	while( elapsed_ns < to_f8( time ) )
+	{
+		QueryPerformanceCounter( ref_of( end ) );
+		elapsed_ns = ( ( end.QuadPart - start.QuadPart ) * 1e9 ) / freq.QuadPart;
+	}
+#else
+	struct timespec ts;
+	ts.tv_sec = ns / nano_per_sec;
+	ts.tv_nsec = ns mod nano_per_sec;
+	nanosleep( &ts, NULL );
+#endif
+}
 
 //
 
